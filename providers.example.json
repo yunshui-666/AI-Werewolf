@@ -1,0 +1,18 @@
+[
+  {
+    "profile_id": "deepseek",
+    "name": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "key_env": "DEEPSEEK_API_KEY",
+    "requires_key": true
+  },
+  {
+    "profile_id": "custom",
+    "name": "自定义 OpenAI 兼容接口",
+    "base_url": "https://api.example.com/v1",
+    "model": "your-model-name",
+    "key_env": "CUSTOM_API_KEY",
+    "requires_key": true
+  }
+]

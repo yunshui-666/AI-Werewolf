@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WerewolfArena 用户输入流程图</title>
+  <style>
+    /* 独立图解使用本地样式，直接打开 HTML 就能阅读，无需运行游戏。 */
+    body { margin:0; background:#101925; color:#e6edf5; font-family:"Microsoft YaHei",sans-serif; padding:40px 20px; }
+    main { max-width:1000px; margin:auto; }
+    h1 { font-size:28px; font-weight:500; margin:0 0 12px; }
+    p { color:#a8b8cb; line-height:1.9; }
+    .track { display:flex; flex-direction:column; gap:9px; align-items:center; margin:30px 0; }
+    .node { border:1px solid #46566e; background:#1a293c; border-radius:12px; padding:18px 22px; width:80%; text-align:center; }
+    .node strong { display:block; font-weight:500; margin:7px 0; font-size:17px; }
+    .node span { font-size:11px; letter-spacing:1px; color:#d8b884; }
+    .node small { color:#a8b8cb; line-height:1.9; }
+    .arrow { color:#d8b884; font-size:20px; }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:20px; width:100%; }
+    .split .node { width:auto; }
+    .details { border-top:1px solid #344359; padding-top:24px; line-height:2; }
+    code { color:#d8b884; background:#1a293c; padding:2px 6px; border-radius:4px; }
+    @media(max-width:600px) { .node { width:88%; padding:15px; } .split { grid-template-columns:1fr; } h1 { font-size:22px; } }
+  </style>
+</head>
+<body><main>
+  <h1>从用户输入到游戏结算</h1>
+  <p>WerewolfArena · 本地浏览器、Python 主持人与 LangGraph 的完整数据路径。</p>
+  <div class="track">
+    <div class="node"><span>启动与配置</span><strong>打开网页 → 选择板子、座位与逐 Agent API</strong><small>POST /api/game/start → SessionOptions 校验 → 创建独立 Agent</small></div>
+    <div class="arrow">↓</div>
+    <div class="node"><span>身份初始化</span><strong>随机分配身份与人格 → 加载对应角色 SKILL.md</strong><small>真实状态留在 GameEngine，独立记忆通过 PlayerView 提供</small></div>
+    <div class="arrow">↓</div>
+    <div class="node"><span>LangGraph</span><strong>夜晚行动 → 结算 → 白天讨论 → 投票 → 胜负路由</strong><small>守卫 → 狼人 → 女巫 → 预言家，死亡猎人在胜负判定前响应</small></div>
+    <div class="arrow">↓ 每次轮到某个玩家行动</div>
+    <div class="split">
+      <div class="node"><span>真人输入</span><strong>创建 request_id，等待网页输入</strong><small>游戏线程释放等待锁 → 页面显示合法候选<br>你输入发言或选择目标 → POST /api/game/action</small></div>
+      <div class="node"><span>AI 决策</span><strong>本人视图 + 角色 skill + 行动 Prompt</strong><small>离线策略或所选 API → JSON 结构化输出<br>失败时有界重试，再使用合法降级行动</small></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="node"><span>校验与执行</span><strong>Pydantic 校验 → 规则校验 → GameEngine 修改状态</strong><small>核对身份、阶段、目标、次数与药品资源，去重过期输入请求</small></div>
+    <div class="arrow">↓</div>
+    <div class="node"><span>结算</span><strong>公开事件 → 死亡响应 → 胜负判定</strong><small>狼刀、守护和药品统一计算，待结算选票收齐后公开</small></div>
+    <div class="arrow">↓</div>
+    <div class="node"><span>页面输出</span><strong>轮询白名单快照 → 圆桌、记录、私有面板与可选朗读</strong><small>语音按公开发言排队播放，终局才统一显示全部身份</small></div>
+    <div class="arrow">↻ 未结束时继续当前流程或下一夜</div>
+  </div>
+  <section class="details">
+    <h2>对照代码阅读</h2>
+    <p><code>web/static/app.js</code> 提交输入与轮询。<code>web/server.py</code> 处理 HTTP。<code>web/session.py</code> 等待真人输入和管理后台线程。<code>game/runner.py</code> 请求决策。<code>game/rules.py</code> 校验规则。<code>game/engine.py</code> 修改真实状态。<code>workflow/graph.py</code> 编排循环。</p>
+    <p>API Key 保存在本地配置或后端内存。浏览器收到的是本人可见信息，角色攻略是通用知识，实际角色分配由主持人持有。</p>
+  </section>
+</main></body></html>

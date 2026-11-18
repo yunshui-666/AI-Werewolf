@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="与独立 AI 角色同桌推理的本地狼人杀游戏">
+  <title>WerewolfArena · 月下圆桌</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- 顶栏只承载跨对局的功能。游戏状态与真人输入分别位于圆桌和底部面板。 -->
+  <header class="topbar">
+    <div class="brand"><span class="moon" aria-hidden="true">◕</span><div>Werewolf<span>Arena</span><small>月下圆桌</small></div></div>
+    <nav aria-label="游戏工具">
+      <button id="guide-button" class="quiet">角色攻略</button>
+      <button id="flow-button" class="quiet">流程图</button>
+      <button id="profiles-button" class="quiet">接口与声线</button>
+    </nav>
+    <label class="speech-toggle">语速 <select id="speech-rate" aria-label="朗读语速"><option value="0.8">0.8 倍</option><option value="1">1.0 倍</option><option value="1.3" selected>1.3 倍</option><option value="1.6">1.6 倍</option><option value="2">2.0 倍</option></select></label>
+    <label class="speech-toggle"><input id="speech-enabled" type="checkbox" checked> 语音发言</label>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel setup-panel">
+        <h1>入席设置</h1>
+        <label>本局配置<select id="preset"><option value="standard12">12 人 · 预女猎守</option><option value="classic8">8 人 · 经典练习</option></select></label>
+        <p id="role-counts" class="muted small"></p>
+        <label>你的座位<select id="human-seat"></select></label>
+        <div class="field-pair"><label>发言轮数<input id="rounds" type="number" min="1" max="10" value="2"></label><label>随机种子<input id="seed" type="number" placeholder="随机"></label></div>
+        <label>AI 发言节拍 <span id="delay-label">1.0 秒</span><input id="delay" type="range" min="0" max="2500" step="100" value="1000"></label>
+        <button id="start" class="primary">开始对局 <span>↗</span></button>
+        <button id="stop" class="secondary" disabled>结束当前对局</button>
+      </section>
+
+      <section id="own-card" class="panel own-card">
+        <h2>你的身份</h2>
+        <div class="own-portrait portrait" data-role="villager"></div>
+        <h3 id="own-role">等待抽取身份</h3>
+        <p id="own-description" class="muted small">开局后，在这里查看你的身份与专属 skill。</p>
+        <button id="own-skill" class="text-button" disabled>查看已加载 skill</button>
+        <div id="private-info" class="private-info"></div>
+      </section>
+    </aside>
+
+    <section class="play-column" aria-label="游戏圆桌">
+      <div class="stage-header"><div><p class="eyebrow">THE MOONLIT TABLE</p><h2 id="phase-title">等待入席</h2></div><div id="phase-detail" class="phase-detail">选择座位，与 AI 一起推理</div></div>
+      <div id="arena" class="arena" data-phase="night">
+        <div class="ambient-light"></div>
+        <div class="table"><div class="table-inner"><span class="table-moon">☾</span><strong id="table-status">天黑请闭眼</strong><span id="table-subtitle">每个人都有自己的秘密</span><div class="table-stars">✦　✧　✦</div></div></div>
+        <div id="players" class="players"></div>
+      </div>
+      <section class="panel action-panel" aria-live="polite">
+        <div class="action-heading"><div><span class="eyebrow">YOUR TURN</span><h2 id="action-title">准备好后开始游戏</h2></div><span id="action-hint" class="muted small">你的行动将在这里提交</span></div>
+        <div id="action-content"><p class="muted">你可以自主发言、投票，并使用抽中角色的专属技能。</p></div>
+        <div id="action-error" class="error" role="alert"></div>
+      </section>
+    </section>
+
+    <aside class="panel conversation">
+      <div class="conversation-header"><div><h2>圆桌记录</h2><p class="muted small">公开发言与本局事件</p></div><span id="alive-count" class="alive-count">12 位入席</span></div>
+      <div class="record-filters" aria-label="记录筛选"><button class="selected" data-filter="all">全部</button><button data-filter="speech">发言</button><button data-filter="vote">投票</button></div>
+      <div id="events" class="events" aria-live="polite"><div class="empty-record"><span>☾</span><p>故事将从第一夜开始</p></div></div>
+      <div class="voice-status"><span id="voice-status">语音发言已开启</span><button id="retry-speech" class="text-button" hidden>重试语音</button><button id="clear-speech" class="text-button">跳过本条</button></div>
+    </aside>
+  </main>
+
+  <!-- 配置弹窗包含逐座位 API/声音选择，以及添加兼容接口的表单。 -->
+  <dialog id="profiles-dialog" class="wide-dialog">
+    <div class="dialog-header"><div><p class="eyebrow">AGENT CONNECTIONS</p><h2>接口与声线</h2></div><button class="close-dialog" aria-label="关闭">×</button></div>
+    <p class="muted">每个 AI 使用独立记忆，可选择不同模型。温柔男声和温柔女声使用本机中文语音，豆包声色为可选云服务，设置保存在当前浏览器。</p>
+    <p id="provider-summary" class="small muted" role="status"></p>
+    <p id="provider-warnings" class="small error" role="status"></p>
+    <button id="use-env" class="secondary">所有 AI 跟随 .env</button>
+    <div id="seat-configs" class="seat-configs"></div>
+    <details class="add-profile"><summary>添加 OpenAI 兼容接口</summary>
+      <form id="profile-form">
+        <div class="field-pair"><label>配置 ID<input name="profile_id" required placeholder="my-provider" pattern="[A-Za-z0-9_-]{1,40}"></label><label>显示名称<input name="name" required placeholder="我的模型接口"></label></div>
+        <label>API Base URL<input name="base_url" type="url" required placeholder="https://api.example.com/v1"></label>
+        <div class="field-pair"><label>模型名称<input name="model" required placeholder="model-name"></label><label>本地环境变量名<input name="key_env" value="CUSTOM_API_KEY" required></label></div>
+        <label>API Key <span class="muted">仅本次服务运行有效，也可在本地 .env 填写上面的变量</span><input name="api_key" type="password" autocomplete="new-password" placeholder="可留空，使用本地配置"></label>
+        <label class="inline-check"><input name="requires_key" type="checkbox" checked> 此接口需要 API Key</label>
+        <button class="primary" type="submit">保存接口配置</button><p id="profile-message" class="small" role="status"></p>
+      </form>
+    </details>
+    <p class="small muted">API 选择在下一局生效。真人座位使用你自己的输入。</p>
+  </dialog>
+
+  <dialog id="guide-dialog" class="wide-dialog">
+    <div class="dialog-header"><div><p class="eyebrow">ROLE PLAYBOOK</p><h2>角色专属 skill</h2></div><button class="close-dialog" aria-label="关闭">×</button></div>
+    <div id="skill-tabs" class="skill-tabs"></div><article id="skill-content" class="markdown"></article>
+    <details class="research-details"><summary>研究来源与本版规则</summary><article id="research-content" class="markdown"></article></details>
+  </dialog>
+
+  <dialog id="flow-dialog" class="wide-dialog flow-dialog">
+    <div class="dialog-header"><div><p class="eyebrow">REQUEST TO RESOLUTION</p><h2>从你的输入到游戏结算</h2></div><button class="close-dialog" aria-label="关闭">×</button></div>
+    <p class="muted">浏览器负责展示和输入，Python 负责可见信息、规则与真实状态。</p>
+    <div class="flow-track">
+      <div><span>浏览器</span><strong>选择配置与座位</strong><small>POST /api/game/start</small></div><b>↓</b>
+      <div><span>Python</span><strong>随机身份 → 加载角色 skill</strong><small>独立 Agent、记忆与 API 客户端</small></div><b>↓</b>
+      <div><span>LangGraph</span><strong>守卫 → 狼人 → 女巫 → 预言家</strong><small>为每人单独构造 PlayerView</small></div><b>↓</b>
+      <div class="flow-split"><section><span>轮到你</span><strong>等待网页输入</strong><small>request_id + 合法目标</small></section><section><span>轮到 AI</span><strong>skill + Prompt → API / Mock</strong><small>Pydantic 结构与行动校验</small></section></div><b>↓</b>
+      <div><span>规则引擎</span><strong>执行行动 → 合并夜间效果</strong><small>猎人响应完成后检查胜负</small></div><b>↓</b>
+      <div><span>白天</span><strong>按编号发言 → 收齐选票 → 放逐</strong><small>继续下一夜，或进入终局</small></div><b>↓</b>
+      <div><span>网页轮询</span><strong>公开事件 + 你自己的私有信息</strong><small>卡通圆桌展示 · 可选语音队列 · 终局亮牌</small></div>
+    </div>
+  </dialog>
+  <!-- 夜晚只为本人显示必要操作。遮罩覆盖记录、桌面与角色卡，避免旁观夜间行动。 -->
+  <section id="night-curtain" class="night-curtain" hidden aria-label="夜晚闭眼">
+    <div class="night-notice"><h2 id="night-heading" tabindex="-1">天黑请闭眼</h2><p id="night-message">等待天亮…</p></div>
+    <button id="night-stop" class="text-button">结束对局</button>
+  </section>
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
